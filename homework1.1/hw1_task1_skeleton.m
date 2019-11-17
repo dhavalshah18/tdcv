@@ -17,8 +17,8 @@ object_path = 'data/teabox.ply';
 % box. Using coordinates of teabox model, vertex numbering is visualized in
 % image vertices.png
 
-imshow('vertices.png')
-title('Vertices numbering')
+% imshow('vertices.png')
+% title('Vertices numbering')
 
 %% Label images
 % You can use this function to label corners of the model on all images
@@ -97,7 +97,7 @@ end
 % Edges of the object bounding box
 edges = [[1, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 7]
     [2, 4, 5, 3, 6, 4, 7, 8, 6, 8, 7, 8]];
-visualise_cameras(vertices, edges, cam_in_world_orientations, cam_in_world_locations);
+% visualise_cameras(vertices, edges, cam_in_world_orientations, cam_in_world_locations);
 
 %% Detect SIFT keypoints in the images
 
@@ -108,13 +108,13 @@ run('vlfeat/toolbox/vl_setup')
 
 % Place SIFT keypoints and corresponding descriptors for all images here
 
-keypoints = cell(num_files,1); 
-descriptors = cell(num_files,1); 
-
+% keypoints = cell(num_files,1); 
+% descriptors = cell(num_files,1); 
+% 
 % for i=1:length(Filenames)
 %     fprintf('Calculating sift features for image: %d \n', i)
 % 
-%    TODO: Prepare the image (img) for vl_sift() function
+%   % TODO: Prepare the image (img) for vl_sift() function
 %     img = im2single(rgb2gray(imread(char(Filenames(i)))));
 %     [keypoints{i}, descriptors{i}] = vl_sift(img) ;
 % end
@@ -129,13 +129,13 @@ load('sift_keypoints.mat');
 
 
 % Visualisation of sift features for the first image
-figure()
-hold on;
-imshow(char(Filenames(1)), 'InitialMagnification', 'fit');
-vl_plotframe(keypoints{1}(:,:), 'linewidth',2);
-title('SIFT features')
-hold off;
-
+% figure()
+% hold on;
+% imshow(char(Filenames(1)), 'InitialMagnification', 'fit');
+% vl_plotframe(keypoints{1}(:,:), 'linewidth',2);
+% title('SIFT features')
+% hold off;
+% 
 
 
 %% Build SIFT model
@@ -159,8 +159,8 @@ num_samples=1000;
 size_total_sift_points=num_samples*num_files;
 
 % Visualise cameras and model SIFT keypoints
-fig = visualise_cameras(vertices, edges, cam_in_world_orientations, cam_in_world_locations);
-hold on
+% fig = visualise_cameras(vertices, edges, cam_in_world_orientations, cam_in_world_locations);
+% hold on
 
 % Place model's SIFT keypoints coordinates and descriptors here
 model.coord3d = [];
@@ -192,6 +192,7 @@ for i=1:num_files
     [intersect(j,:), t, u, v, coord] = TriangleRayIntersection(orig', r', vertices(faces(:,1)+1,:),vertices(faces(:,2)+1,:),vertices(faces(:,3)+1,:));
     outliers = find(isnan(coord(:,1)));
     coord(outliers,:)=[];
+    
     if ~isempty(coord)
         model.allIntersection = [model.allIntersection; coord];
         t(outliers,:)=[];
@@ -199,24 +200,25 @@ for i=1:num_files
         [min_t, index_min] = min(t);
         coord = coord(index_min,:);
         model.coord3d = [model.coord3d;coord];
+        model.descriptors = [model.descriptors, descriptors{i}(:,sel(j))];
     end
     end  
         
 end
 
-hold off
-xlabel('x');
-ylabel('y');
-zlabel('z');
+% hold off
+% xlabel('x');
+% ylabel('y');
+% zlabel('z');
 
 % Save your sift model for the future tasks
 save('sift_model.mat', 'model');
 
 %% Visualise only the SIFT model
-figure()
-scatter3(model.coord3d(:,1), model.coord3d(:,2), model.coord3d(:,3), 'o', 'b');
-axis equal;
-xlabel('x');
-ylabel('y');
-zlabel('z');
+% figure()
+% scatter3(model.coord3d(:,1), model.coord3d(:,2), model.coord3d(:,3), 'o', 'b');
+% axis equal;
+% xlabel('x');
+% ylabel('y');
+% zlabel('z');
 

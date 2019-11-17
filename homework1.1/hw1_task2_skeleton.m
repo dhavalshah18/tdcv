@@ -5,9 +5,9 @@ addpath('helper_functions')
 
 %% Setup
 % path to the images folder
-path_img_dir = '../data/detection';
+path_img_dir = './data/detection';
 % path to object ply file
-object_path = '../data/teabox.ply';
+object_path = './data/teabox.ply';
 
 % Read the object's geometry 
 % Here vertices correspond to object's corners and faces are triangles
@@ -18,6 +18,15 @@ load('sift_model.mat');
 
 
 % TODO: setup camera intrinsic parameters using cameraParameters()
+% Added these lines
+
+fx = 2960.37845;
+fy = fx;
+cx = 1841.68855;
+cy = 1235.23369;
+
+intrinsicsMatrix = [fx 0 0;0 fy 0;cx cy 1];
+camera_params = cameraParameters('IntrinsicMatrix',intrinsicsMatrix);
 
 %% Get all filenames in images folder
 
@@ -28,6 +37,8 @@ num_files = length(Filenames);
 
 %% Match SIFT features of new images to the SIFT model with features computed in the task 1
 % You should use VLFeat function vl_ubcmatch()
+run('vlfeat/toolbox/vl_setup')                                              % Added
+
 
 % Place SIFT keypoints and descriptors of new images here
 keypoints=cell(num_files,1);
@@ -40,24 +51,25 @@ sift_matches=cell(num_files,1);
 % When taking higher value, match is only recognized if similarity is very high
 threshold_ubcmatch = 1.5; 
 
-for i=1:num_files
-    fprintf('Calculating and matching sift features for image: %d \n', i)
-    
-%     TODO: Prepare the image (img) for vl_sift() function
-    [keypoints{i}, descriptors{i}] = vl_sift(img);
-%     Match features between SIFT model and SIFT features from new image
-    sift_matches{i} = vl_ubcmatch(descriptors{i}, model.descriptors, threshold_ubcmatch); 
-end
+% for i=1:num_files
+%     fprintf('Calculating and matching sift features for image: %d \n', i)
+%     
+% %     TODO: Prepare the image (img) for vl_sift() function
+%     img = im2single(rgb2gray(imread(char(Filenames(i)))));                  % Added
+%     [keypoints{i}, descriptors{i}] = vl_sift(img);
+% %     Match features between SIFT model and SIFT features from new image
+%     sift_matches{i} = vl_ubcmatch(descriptors{i}, model.descriptors, threshold_ubcmatch); 
+% end
 
 
 % Save sift features, descriptors and matches and load them when you rerun the code to save time
-save('sift_matches.mat', 'sift_matches');
-save('detection_keypoints.mat', 'keypoints')
-save('detection_descriptors.mat', 'descriptors')
+%save('sift_matches.mat', 'sift_matches');
+%save('detection_keypoints.mat', 'keypoints')
+%save('detection_descriptors.mat', 'descriptors')
 
-% load('sift_matches.mat')
-% load('detection_keypoints.mat')
-% load('detection_descriptors.mat')
+load('sift_matches.mat')
+load('detection_keypoints.mat')
+load('detection_descriptors.mat')
 
 
 %% PnP and RANSAC 
@@ -90,7 +102,13 @@ for i = 1:num_files
     fprintf('Running PnP+RANSAC for image: %d \n', i)
    
 %     TODO: Implement the RANSAC algorithm here
-
+    for r = 1:ransac_iterations
+        % Part i
+        % Randomly select 4 correspondances from S
+        
+        
+    end
+    
     
 end
 
