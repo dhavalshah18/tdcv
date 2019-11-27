@@ -155,14 +155,15 @@ load('sift_keypoints.mat');
 % Leave the value of 1000 to retain reasonable computational time for debugging
 % In order to contruct the final SIFT model that will be used later, consider
 % increasing this value to get more SIFT points in your model
-num_samples=1000;
+num_samples=10000;
 size_total_sift_points=num_samples*num_files;
 
 % Visualise cameras and model SIFT keypoints
-% fig = visualise_cameras(vertices, edges, cam_in_world_orientations, cam_in_world_locations);
-% hold on
+fig = visualise_cameras(vertices, edges, cam_in_world_orientations, cam_in_world_locations);
+hold on
 
 % Place model's SIFT keypoints coordinates and descriptors here
+model.keypoints= [];
 model.coord3d = [];
 model.allIntersection = [];
 model.descriptors = [];
@@ -173,7 +174,7 @@ coord = ones(12,3);
 for i=1:num_files
     
 %     Randomly select a number of SIFT keypoints
-    perm = randperm(size(keypoints{i},2)) ;
+    perm = randperm(size(keypoints{i},2));
     sel = perm(1:num_samples);
     
     P = camera_params.IntrinsicMatrix.'*[cam_in_world_orientations(:,:,i) -cam_in_world_orientations(:,:,i)*cam_in_world_locations(:,:,i).'];
@@ -195,6 +196,7 @@ for i=1:num_files
     
     if ~isempty(coord)
         model.allIntersection = [model.allIntersection; coord];
+        model.keypoints =[model.keypoints; m'];
         t(outliers,:)=[];
         model.allt = [model.allt; t];
         [min_t, index_min] = min(t);
@@ -206,19 +208,19 @@ for i=1:num_files
         
 end
 
-% hold off
-% xlabel('x');
-% ylabel('y');
-% zlabel('z');
+hold off
+xlabel('x');
+ylabel('y');
+zlabel('z');
 
 % Save your sift model for the future tasks
-save('sift_model.mat', 'model');
+%save('sift_model.mat', 'model');
 
 %% Visualise only the SIFT model
-% figure()
-% scatter3(model.coord3d(:,1), model.coord3d(:,2), model.coord3d(:,3), 'o', 'b');
-% axis equal;
-% xlabel('x');
-% ylabel('y');
-% zlabel('z');
+figure()
+scatter3(model.coord3d(:,1), model.coord3d(:,2), model.coord3d(:,3), 'o', 'b');
+axis equal;
+xlabel('x');
+ylabel('y');
+zlabel('z');
 
