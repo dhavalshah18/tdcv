@@ -20,13 +20,10 @@ load('sift_model.mat');
 % TODO: setup camera intrinsic parameters using cameraParameters()
 % Added these lines
 
-fx = 2960.37845;
-fy = fx;
-cx = 1841.68855;
-cy = 1235.23369;
-
-intrinsics_matrix = [fx 0 0;0 fy 0;cx cy 1];
-camera_params = cameraParameters('IntrinsicMatrix',intrinsics_matrix);
+focalLength = [2960.37845 2960.37845];
+principalPoint = [1841.68855 1235.23369];
+imageSize = [2456 3680];
+camera_params = cameraIntrinsics(focalLength,principalPoint, imageSize);
 
 %% Get all filenames in images folder
 
@@ -49,27 +46,27 @@ sift_matches=cell(num_files,1);
 
 % Default threshold for SIFT keypoints matching: 1.5 
 % When taking higher value, match is only recognized if similarity is very high
-threshold_ubcmatch = 1.5; 
+threshold_ubcmatch = 2.0; 
 
-for i=1:num_files
-    fprintf('Calculating and matching sift features for image: %d \n', i)
-    
-%     TODO: Prepare the image (img) for vl_sift() function
-    img = im2single(rgb2gray(imread(char(Filenames(i)))));                  % Added
-    [keypoints{i}, descriptors{i}] = vl_sift(img);
-%     Match features between SIFT model and SIFT features from new image
-    sift_matches{i} = vl_ubcmatch(descriptors{i}, model.descriptors, threshold_ubcmatch); 
-end
+% for i=1:num_files
+%     fprintf('Calculating and matching sift features for image: %d \n', i)
+%     
+% %     TODO: Prepare the image (img) for vl_sift() function
+%     img = im2single(rgb2gray(imread(char(Filenames(i)))));                  % Added
+%     [keypoints{i}, descriptors{i}] = vl_sift(img);
+% %     Match features between SIFT model and SIFT features from new image
+%     sift_matches{i} = vl_ubcmatch(descriptors{i}, model.descriptors, threshold_ubcmatch); 
+% end
+% 
+% 
+% % Save sift features, descriptors and matches and load them when you rerun the code to save time
+% save('sift_matches.mat', 'sift_matches');
+% save('detection_keypoints.mat', 'keypoints')
+% save('detection_descriptors.mat', 'descriptors')
 
-
-% Save sift features, descriptors and matches and load them when you rerun the code to save time
-save('sift_matches.mat', 'sift_matches');
-save('detection_keypoints.mat', 'keypoints')
-save('detection_descriptors.mat', 'descriptors')
-
-% load('sift_matches.mat')
-% load('detection_keypoints.mat')
-% load('detection_descriptors.mat')
+load('sift_matches.mat')
+load('detection_keypoints.mat')
+load('detection_descriptors.mat')
 
 
 %% PnP and RANSAC 
@@ -95,68 +92,82 @@ cam_in_world_orientations = zeros(3,3,num_files);
 cam_in_world_locations = zeros(1,3,num_files);
 best_inliers_set = cell(num_files, 1);
 
-ransac_iterations = 500; 
-threshold_ransac = 50;
+ransac_iterations = 2000; 
+%threshold_ransac = 700; % 700 with bad img 18, 20, 21, 22, saved as best_inliers_set700
+threshold_ransac = 750; % bad 16, 18, 21, 22
+% 
+% for i = 1:num_files
+%     fprintf('Running PnP+RANSAC for image: %d \n', i)
+% %     TODO: Implement the RANSAC algorithm here
+%     max_inliers = 4;
+%     
+%     % Part i
+%      % Randomly select 4 correspondances from S
+%     num_points = size(sift_matches{i}, 2);
+%     sel = randperm(num_points, 4);
+%     best_inliers = sel;
+%     image_points = keypoints{i}(1:2, sift_matches{i}(1,sel))';
+%     world_points = model.coord3d(sift_matches{i}(2,sel),:);
+% 
+%      % Estimate pose
+%     [cam_in_world_orientations(:,:,i),cam_in_world_locations(:,:,i),inlieridx,status] = ...
+%             estimateWorldCameraPose(image_points, world_points, ...
+%             camera_params, 'MaxReprojectionError', 10000, 'MaxNumTrials', 10, 'Confidence', 0.0000001);
+% 
+% 
+%     for r = 1:ransac_iterations
+%         fprintf('Running RANSAC iteration: %d \n', r)
+%         
+%         % Part ii
+%          % Reproject 3d points to 2d
+%         matches3d = model.coord3d(sift_matches{i}(2,:),:);
+%         points2d = keypoints{i}(1:2, sift_matches{i}(1,:));
+%         est_points2d = project3d2image(matches3d', camera_params, ...
+%             cam_in_world_orientations(:,:,i), cam_in_world_locations(:,:,i));
+%         
+%          % Find Euclidean distance between points of image and reprojected
+%          % points
+%         diff = pdist2(points2d',est_points2d');
+%         diag_diff = diag(diff);
+%         inliers = (diag_diff <= threshold_ransac);
+%         inliers_ind = find(inliers)';
+%         
+%         % Part iii
+%         if (sum(inliers) > max_inliers)
+%             best_inliers = inliers_ind;
+%             max_inliers = sum(inliers);
+% %             image_points = keypoints{i}(1:2, sift_matches{i}(1,best_inliers))';
+% %             world_points = model.coord3d(sift_matches{i}(2, best_inliers), :);
+% %             [cam_in_world_orientations(:,:,i),cam_in_world_locations(:,:,i),inlieridx,status] = ...
+% %                 estimateWorldCameraPose(image_points, world_points, camera_params, ...
+% %                 'MaxReprojectionError', 10);
+% 
+%         end
+%         
+%     end
+%     
+%     image_points = keypoints{i}(1:2, sift_matches{i}(1,best_inliers))';
+%     world_points = model.coord3d(sift_matches{i}(2, best_inliers), :);
+%     best_inliers_set{i} = best_inliers;
+%     [cam_in_world_orientations(:,:,i),cam_in_world_locations(:,:,i),inlieridx,status] = ...
+%         estimateWorldCameraPose(image_points, world_points, camera_params, ...
+%         'MaxReprojectionError', 10, 'Confidence', 95);
+%     
+% end
 
-        
-for i = 1:num_files
-    fprintf('Running PnP+RANSAC for image: %d \n', i)
-%     TODO: Implement the RANSAC algorithm here
-    max_inliers = 4;
-    
-    % Part i
-     % Randomly select 4 correspondances from S
-    num_points = size(sift_matches{i}, 2);
-    sel = randsample(num_points, 4);
-    best_inliers = sel;
-    image_points = keypoints{i}(1:2, sift_matches{i}(1,sel))';
-    world_points = model.coord3d(sift_matches{i}(2,sel),:);
+% save('best_inliers_set750.mat', 'best_inliers_set');
+% save('best_cam_locations750.mat', 'cam_in_world_locations')
+% save('best_cam_orientations750.mat', 'cam_in_world_orientations')
 
-     % Estimate pose using PnP
-    [cam_in_world_orientations(:,:,i),cam_in_world_locations(:,:,i)] = ...
-            estimateWorldCameraPose(image_points, world_points, ...
-            camera_params, 'MaxReprojectionError', 10000);
+% % Good detection with threshold 700
+load('best_inliers_set700.mat')
+load('best_cam_locations700.mat')
+load('best_cam_orientations700.mat')
 
-
-    for r = 1:ransac_iterations
-        fprintf('Running RANSAC iteration: %d \n', r)
-
-        % Part ii
-        [R, t] = cameraPoseToExtrinsics(cam_in_world_orientations(:,:,i),... 
-                    cam_in_world_locations(:,:,i));
-        P = intrinsics_matrix*[R' t'];
-        m = model.coord3d(sift_matches{i}(2,:),:);
-        M = [m ones(size(m ,1), 1)]'; %%%%%%%%%
-        est = P*M;
-        est_points2d=est([1 2],:)./est(3,:);
-        diff = (abs(m(:,1:2)' - est_points2d)).^2; %%%%%%%%%%%%%%%
-        sumd = sqrt(sum(diff, 1));
-        inliers = (sumd >= threshold_ransac);
-        inliers_ind = find(inliers);
-        
-        % Part iii
-        if (sum(inliers) > max_inliers)
-            best_inliers = inliers_ind;
-            max_inliers = sum(inliers);
-            image_points = keypoints{i}(1:2, sift_matches{i}(1,best_inliers))';
-            world_points = model.coord3d(sift_matches{i}(2,best_inliers),:);
-            [cam_in_world_orientations(:,:,i),cam_in_world_locations(:,:,i)] ...
-                = estimateWorldCameraPose(image_points, world_points, ...
-                camera_params, 'MaxReprojectionError', 10000);
-
-        end
-        
-        
-    end
-    
-    image_points = keypoints{i}(1:2, sift_matches{i}(1, best_inliers))';
-    world_points = model.coord3d(sift_matches{i}(2, best_inliers), :);
-    best_inliers_set{i} = best_inliers;
-    [cam_in_world_orientations(:,:,i),cam_in_world_locations(:,:,i)] = estimateWorldCameraPose(image_points, world_points, camera_params, 'MaxReprojectionError', 10000);
-    
-end
-
-
+% % Good detection with threshold 750
+% load('best_inliers_set750.mat')
+% load('best_cam_locations750.mat')
+% load('best_cam_orientations750.mat')
 
 %% Visualize inliers and the bounding box
 
@@ -167,7 +178,7 @@ end
 edges = [[1, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 7]
     [2, 4, 5, 3, 6, 4, 7, 8, 6, 8, 7, 8]];
 
-for i=1:3
+for i=1:num_files
     
     figure()
     imshow(char(Filenames(i)), 'InitialMagnification', 'fit');
@@ -175,7 +186,7 @@ for i=1:3
     hold on
     
 %   Plot inliers set
-    PlotInlierOutlier(best_inliers_set{i}, camera_params, sift_matches{i}, model.coord3d, keypoints{i}, cam_in_world_orientations(:,:,i), cam_in_world_locations(:,:,i))
+    %PlotInlierOutlier(best_inliers_set{i}, camera_params, sift_matches{i}, model.coord3d, keypoints{i}, cam_in_world_orientations(:,:,i), cam_in_world_locations(:,:,i))
 %   Plot bounding box
     points = project3d2image(vertices',camera_params, cam_in_world_orientations(:,:,i), cam_in_world_locations(:, :, i));
     for j=1:12

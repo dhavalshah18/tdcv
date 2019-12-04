@@ -41,21 +41,21 @@ Filenames = fullfile(path_img_dir, {FolderInfo.name} );
 num_files = length(Filenames);
 
 %% Check corners labeling by plotting labels
-% for i=1:length(Filenames)
-%     figure()
-%     imshow(char(Filenames(i)), 'InitialMagnification', 'fit')
-%     title(sprintf('Image: %d', i))
-%     hold on
-%     for point_idx = 1:8
-%         x = labeled_points(point_idx,1,i);
-%         y = labeled_points(point_idx,2,i); 
-%         if ~isnan(x)
-%             plot(x,y,'x', 'LineWidth', 3, 'MarkerSize', 15)
-%             text(x,y, char(num2str(point_idx)), 'FontSize',12)
-%         end
-%     end
-% end
-% 
+for i=1:length(Filenames)
+    figure()
+    imshow(char(Filenames(i)), 'InitialMagnification', 'fit')
+    title(sprintf('Image: %d', i))
+    hold on
+    for point_idx = 1:8
+        x = labeled_points(point_idx,1,i);
+        y = labeled_points(point_idx,2,i); 
+        if ~isnan(x)
+            plot(x,y,'x', 'LineWidth', 3, 'MarkerSize', 15)
+            text(x,y, char(num2str(point_idx)), 'FontSize',12)
+        end
+    end
+end
+
 
 %% Call estimateWorldCameraPose to perform PnP
 
@@ -97,7 +97,7 @@ end
 % Edges of the object bounding box
 edges = [[1, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 7]
     [2, 4, 5, 3, 6, 4, 7, 8, 6, 8, 7, 8]];
-% visualise_cameras(vertices, edges, cam_in_world_orientations, cam_in_world_locations);
+visualise_cameras(vertices, edges, cam_in_world_orientations, cam_in_world_locations);
 
 %% Detect SIFT keypoints in the images
 
@@ -108,9 +108,9 @@ run('vlfeat/toolbox/vl_setup')
 
 % Place SIFT keypoints and corresponding descriptors for all images here
 
-% keypoints = cell(num_files,1); 
-% descriptors = cell(num_files,1); 
-% 
+keypoints = cell(num_files,1); 
+descriptors = cell(num_files,1); 
+
 % for i=1:length(Filenames)
 %     fprintf('Calculating sift features for image: %d \n', i)
 % 
@@ -129,13 +129,12 @@ load('sift_keypoints.mat');
 
 
 % Visualisation of sift features for the first image
-% figure()
-% hold on;
-% imshow(char(Filenames(1)), 'InitialMagnification', 'fit');
-% vl_plotframe(keypoints{1}(:,:), 'linewidth',2);
-% title('SIFT features')
-% hold off;
-% 
+figure()
+hold on;
+imshow(char(Filenames(1)), 'InitialMagnification', 'fit');
+vl_plotframe(keypoints{1}(:,:), 'linewidth',2);
+title('SIFT features')
+hold off;
 
 
 %% Build SIFT model
@@ -155,7 +154,7 @@ load('sift_keypoints.mat');
 % Leave the value of 1000 to retain reasonable computational time for debugging
 % In order to contruct the final SIFT model that will be used later, consider
 % increasing this value to get more SIFT points in your model
-num_samples=10000;
+num_samples=14000;
 size_total_sift_points=num_samples*num_files;
 
 % Visualise cameras and model SIFT keypoints
@@ -163,7 +162,6 @@ fig = visualise_cameras(vertices, edges, cam_in_world_orientations, cam_in_world
 hold on
 
 % Place model's SIFT keypoints coordinates and descriptors here
-model.keypoints= [];
 model.coord3d = [];
 model.allIntersection = [];
 model.descriptors = [];
@@ -187,16 +185,16 @@ for i=1:num_files
     % TODO: Perform intersection between a ray and the object
     % You can use TriangleRayIntersection to find intersections
     % Pay attention at the visible faces from the given camera position
-    m = keypoints{i}(1:2,sel(j));
-    r = orig + inv(Q)*[m;1];
+    m = [keypoints{i}(1:2,sel(j)); 1];
+    lambda = norm(inv(Q)*m);
+    r = orig + lambda*(inv(Q)*m);
     
-    [intersect(j,:), t, u, v, coord] = TriangleRayIntersection(orig', r', vertices(faces(:,1)+1,:),vertices(faces(:,2)+1,:),vertices(faces(:,3)+1,:));
+    [intersect(j,:), t, u, v, coord] = TriangleRayIntersection(orig', (r-orig)', vertices(faces(:,1)+1,:),vertices(faces(:,2)+1,:),vertices(faces(:,3)+1,:));
     outliers = find(isnan(coord(:,1)));
     coord(outliers,:)=[];
     
     if ~isempty(coord)
         model.allIntersection = [model.allIntersection; coord];
-        model.keypoints =[model.keypoints; m'];
         t(outliers,:)=[];
         model.allt = [model.allt; t];
         [min_t, index_min] = min(t);
@@ -214,7 +212,7 @@ ylabel('y');
 zlabel('z');
 
 % Save your sift model for the future tasks
-%save('sift_model.mat', 'model');
+save('sift_model.mat', 'model');
 
 %% Visualise only the SIFT model
 figure()
