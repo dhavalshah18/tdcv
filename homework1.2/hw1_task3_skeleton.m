@@ -174,25 +174,20 @@ end
 hold off;
 
 
-%% IRLS nonlinear optimisation
-
-% Now you need to implement the method of iteratively reweighted least squares (IRLS)
-% to optimise reprojection error between consecutive image frames
-
 % Method steps:
-% 1) Project SIFT keypoints from the initial frame (image i) to the object using the
+% 1) Back-project SIFT keypoints from the initial frame (image i) to the object using the
 % initial camera pose and the 3D ray intersection code from the task 1. 
 % This will give you 3D coordinates (in the world coordinate system) of the
 % SIFT keypoints from the initial frame (image i) that correspond to the object
-% 2) Find matches between SIFT keypoints from the initial frame (image i) and the
-% subsequent frame (image i+1) using vl_ubcmatch() from VLFeat library
-% 3) Reproject these matches using corresponding 3D coordinates from the
-% step 1 and the initial camera pose back to the subsequent frame (image i+1)
-% 4) Compute the reprojection error between pixels from SIFT
-% matches for the subsequent frame (image i+1) and from reprojected matches
+% 2) Find matches between descriptors of back-projected SIFT keypoints from the initial frame (image i) and the
+% SIFT keypoints from the subsequent frame (image i+1) using vl_ubcmatch() from VLFeat library
+% 3) Project back-projected SIFT keypoints onto the subsequent frame (image i+1) using 3D coordinates from the
+% step 1 and the initial camera pose 
+% 4) Compute the reprojection error between 2D points of SIFT
+% matches for the subsequent frame (image i+1) and 2D points of projected matches
 % from step 3
-% 5) Compute Jacobian of the reprojection error with respect to the pose
-% parameters and apply IRLS to iteratively update the camera pose for the subsequent frame (image i+1)
+% 5) Implement IRLS: for each IRLS iteration compute Jacobian of the reprojection error with respect to the pose
+% parameters and update the camera pose for the subsequent frame (image i+1)
 % 6) Now the subsequent frame (image i+1) becomes the initial frame for the
 % next subsequent frame (image i+2) and the method continues until camera poses for all
 % images are estimated
@@ -201,10 +196,71 @@ hold off;
 % either using Symbolic toolbox or finite differences approach
 
 % TODO: Implement IRLS method for the reprojection error optimisation
+% You can start with these parameters to debug your solution 
+% but you should also experiment with their different values
+threshold_irls = 0.005; % update threshold for IRLS
+N = 50; % number of iterations
+threshold_ubcmatch = 1.5; % matching threshold for vl_ubcmatch()
+coord = cell(num_files,1);
+
+for i = 1:num_files-1
+    fprintf('Running iteration: %d \n', i);
+     % Step 1
+    P = camera_params.IntrinsicMatrix.'*[cam_in_world_orientations(:,:,i) ...
+        -cam_in_world_orientations(:,:,i)*cam_in_world_locations(:,:,i).'];
+    
+    %     Randomly select a number of SIFT keypoints
+    perm = randperm(size(keypoints{i},2));
+    sel = perm(1:30000);
+    Q = P(:,1:3);
+    q = P(:,4);
+    orig = -inv(Q)*q;
+    descriptors_new = [];
+    
+    for j = 1:30000
+        m = [keypoints{i}(1:2,sel(j)); 1];
+        lambda = norm(inv(Q)*m);
+        r = orig + lambda*(inv(Q)*m);
+
+        [~, t, u, v, coords] = TriangleRayIntersection(orig', (r-orig)', ...
+            vertices(faces(:,1)+1,:), vertices(faces(:,2)+1,:), vertices(faces(:,3)+1,:));
+        outliers = find(isnan(coords(:,1)));
+        coords(outliers,:)=[];
+
+        if ~isempty(coords)
+            t(outliers,:)=[];
+            [min_t, index_min] = min(t);
+            coords = coords(index_min,:);
+            coord{i} = [coord{i}; coords];
+            descriptors_new = [descriptors_new, descriptors{i}(:,sel(j))];
+        end
+    end
+     % Step 2
+    sift_matches = vl_ubcmatch(descriptors_new, descriptors{i+1}, threshold_ubcmatch);
+    
+     % Step 3
+    world_points = coord{i}(sift_matches(1,:),:);
+    image_points = keypoints{i+1}(1:2, sift_matches(2,:));
+    
+    [init_orientations,init_locations,inlieridx,~] = ...
+        estimateWorldCameraPose(image_points', world_points, ...
+        camera_params, 'MaxReprojectionError', 20);
+
+     % Step 4
+     fprintf('EARL %d \n', i);
+     [cam_in_world_orientations(:,:,i+1), cam_in_world_locations(:,:,i+1)] = ...
+         earl(init_orientations, init_locations, camera_params, world_points, image_points, threshold_irls, N);
+    
+end
+
 
 
 %% Plot camera trajectory in 3D world CS + cameras
 
+load('good_rotations.mat')
+load('good_translations.mat')
+% load('good_rotations2.mat')
+% load('good_translations2.mat')
 figure()
 % Predicted trajectory
 visualise_trajectory(vertices, edges, cam_in_world_orientations, cam_in_world_locations, 'Color', 'b');
@@ -238,18 +294,29 @@ end
 
 %% Bonus part
 
-% Save estimated camera poses for the validation sequence using TUM Ground-truth trajectories file
+% Save estimated camera poses for the validation sequence using Vision TUM trajectory file
 % format: https://vision.in.tum.de/data/datasets/rgbd-dataset/file_formats
 % Then estimate Absolute Trajectory Error (ATE) and Relative Pose Error for
 % the validation sequence using python tools from: https://vision.in.tum.de/data/datasets/rgbd-dataset/tools
+% In this task you should implement you own function to convert rotation matrix to quaternion
 
-% Save estimated camera poses for the test sequence using TUM Ground-truth
-% trajectories file format
+% Save estimated camera poses for the test sequence using Vision TUM 
+% trajectory file format
 
-% Send us this file with the estimated camera poses for the evaluation
-% If the code and results are good you will get a bonus for this exercise
+% Attach the file with estimated camera poses for the test sequence to your code submission
+% If your code and results are good you will get a bonus for this exercise
 % We are expecting the mean absolute translational error (from ATE) to be
 % approximately less than 1cm
 
 % TODO: Estimate ATE and RPE for validation and test sequences
+fileID = fopen('trajectory.txt', 'w');
 
+for quack = 1:num_files
+    quat = queeny(cam_in_world_orientations(:,:,quack));
+    timestamp = 86400*(datenum(now) - datenum('01-Jan-1970 00:00:00') - 1/24);
+    fprintf(fileID, '%f %f %f %f %f %f %f %f\r\n', timestamp, cam_in_world_locations(:,1,quack), cam_in_world_locations(:,2,quack), cam_in_world_locations(:,3,quack),...
+        quat(1), quat(2), quat(3), quat(4));
+    
+end
+
+fclose(fileID);
