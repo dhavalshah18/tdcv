@@ -10,7 +10,8 @@ function J = jack(intrinsicsMatrix, rotationVector, points2d, points3d)
 
     for i = 1:3
         e = I(:,i); % ith base vector of R
-        dRdv{i} = ((rotationVector(i)*vx + skew_sym_mat(cross(rotationVector, (I-rotationMatrix)*e)))/(norm(rotationVector)^2))*rotationMatrix;
+        dRdv{i} = ((rotationVector(i)*vx + skew_sym_mat(cross(rotationVector, ...
+            (I-rotationMatrix)*e)))/(norm(rotationVector)^2))*rotationMatrix;
     end
     dmtildedM = intrinsicsMatrix;
     for M = 1: numel(points3d(1,:))

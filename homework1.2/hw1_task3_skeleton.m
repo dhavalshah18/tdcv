@@ -11,6 +11,13 @@ object_path = '../data/teabox.ply';
 % path to results folder
 results_path = '../data/tracking/valid/results';
 
+% % path to the test images folder
+% path_img_dir = '../data/tracking/test/img';
+% % path to object ply file
+% object_path = '../data/teabox.ply';
+% % path to results test folder
+% results_path = '../data/tracking/test/results';
+
 % Read the object's geometry 
 % Here vertices correspond to object's corners and faces are triangles
 [vertices, faces] = read_ply(object_path);
@@ -69,7 +76,10 @@ descriptors = cell(num_files,1);
 load('sift_descriptors.mat');
 load('sift_keypoints.mat');
 
-%% Initialization: Compute camera pose for the first image
+% load('sift_descriptors_test.mat');
+% load('sift_keypoints_test.mat');
+
+%% Initialization: SIFT model and SIFT matches
 
 % As the initialization step for the tracking
 % we need to compute the camera pose for the first image 
@@ -78,32 +88,35 @@ load('sift_keypoints.mat');
 % You can use estimateWorldCameraPose() function or your own implementation
 % of the PnP+RANSAC from the previous tasks
 
-% You can get correspondences for PnP+RANSAC either using your SIFT model from the previous tasks
-% or by manually annotating corners (e.g. with mark_images() function)
-
+% % You can get correspondences for PnP+RANSAC either using your SIFT model from the previous tasks
+% % or by manually annotating corners (e.g. with mark_images() function)
+% 
 % Load the SIFT model from the previous task
 load('sift_model.mat');
 
-% Place matches between new SIFT features and SIFT features from the SIFT
-% model here
-sift_matches=cell(num_files,1);
+% % Place matches between new SIFT features and SIFT features from the SIFT
+% % model here
+% sift_matches=cell(num_files,1);
+% 
+% % Default threshold for SIFT keypoints matching: 1.5 
+% % When taking higher value, match is only recognized if similarity is very high
+% threshold_ubcmatch = 2.0; 
+% 
+% fprintf('Calculating and matching sift features for image: %d \n', 1)
+% 
+% sift_matches{1} = vl_ubcmatch(descriptors{1}, model.descriptors, threshold_ubcmatch); 
 
-% Default threshold for SIFT keypoints matching: 1.5 
-% When taking higher value, match is only recognized if similarity is very high
-threshold_ubcmatch = 2.0; 
-
-% for i=1:num_files
-%     fprintf('Calculating and matching sift features for image: %d \n', i)
-%     
-%     sift_matches{i} = vl_ubcmatch(descriptors{i}, model.descriptors, threshold_ubcmatch); 
-% end
-
-
+%%
 % % Save sift features, descriptors and matches and load them when you rerun the code to save time
 % save('sift_matches.mat', 'sift_matches');
 
 load('sift_matches.mat')
 
+% load('test_sift_matches.mat')
+% sift_matches = test_sift_matches;
+
+
+%% Initialization: Getting the first pose with RANSAC + PNP
 ransac_iterations = 2000; 
 threshold_ransac = 750;
 max_inliers = 4;
@@ -159,7 +172,8 @@ world_points = model.coord3d(sift_matches{1}(2, best_inliers), :);
 cam_in_world_orientations(:,:, 1) = init_orientation;
 cam_in_world_locations(:,:, 1) = init_location;
 
-% Visualise the pose for the initial frame
+
+%% Visualise the pose for the initial frame
 edges = [[1, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 7]
     [2, 4, 5, 3, 6, 4, 7, 8, 6, 8, 7, 8]];
 figure()
@@ -173,7 +187,14 @@ for j=1:12
 end
 hold off;
 
+%% Loading good initial pose
 
+load('start_rotations.mat')
+load('start_translations.mat')
+
+% load('test_start_rotations.mat')
+% load('test_start_translations.mat')
+%% Complete IRLS
 % Method steps:
 % 1) Back-project SIFT keypoints from the initial frame (image i) to the object using the
 % initial camera pose and the 3D ray intersection code from the task 1. 
@@ -192,15 +213,10 @@ hold off;
 % next subsequent frame (image i+2) and the method continues until camera poses for all
 % images are estimated
 
-% We suggest you to validate the correctness of the Jacobian implementation
-% either using Symbolic toolbox or finite differences approach
-
-% TODO: Implement IRLS method for the reprojection error optimisation
-% You can start with these parameters to debug your solution 
-% but you should also experiment with their different values
-threshold_irls = 0.005; % update threshold for IRLS
-N = 50; % number of iterations
+threshold_irls = 0.004; % update threshold for IRLS
+N = 20; % number of iterations
 threshold_ubcmatch = 1.5; % matching threshold for vl_ubcmatch()
+max_reproj_err = 10;
 coord = cell(num_files,1);
 
 for i = 1:num_files-1
@@ -209,7 +225,7 @@ for i = 1:num_files-1
     P = camera_params.IntrinsicMatrix.'*[cam_in_world_orientations(:,:,i) ...
         -cam_in_world_orientations(:,:,i)*cam_in_world_locations(:,:,i).'];
     
-    %     Randomly select a number of SIFT keypoints
+    % Randomly select a number of SIFT keypoints
     perm = randperm(size(keypoints{i},2));
     sel = perm(1:30000);
     Q = P(:,1:3);
@@ -236,31 +252,38 @@ for i = 1:num_files-1
         end
     end
      % Step 2
-    sift_matches = vl_ubcmatch(descriptors_new, descriptors{i+1}, threshold_ubcmatch);
+    sift_matches{i+1} = vl_ubcmatch(descriptors_new, descriptors{i+1}, threshold_ubcmatch);
     
      % Step 3
-    world_points = coord{i}(sift_matches(1,:),:);
-    image_points = keypoints{i+1}(1:2, sift_matches(2,:));
+    world_points = coord{i}(sift_matches{i+1}(1,:),:);
+    image_points = keypoints{i+1}(1:2, sift_matches{i+1}(2,:));
     
-    [init_orientations,init_locations,inlieridx,~] = ...
-        estimateWorldCameraPose(image_points', world_points, ...
-        camera_params, 'MaxReprojectionError', 20);
+    [init_orientations, init_locations,idx,status] = ...
+    estimateWorldCameraPose(image_points', world_points, ...
+    camera_params, 'MaxReprojectionError', max_reproj_err);
 
-     % Step 4
-     fprintf('EARL %d \n', i);
-     [cam_in_world_orientations(:,:,i+1), cam_in_world_locations(:,:,i+1)] = ...
+
+    [cam_in_world_orientations(:,:,i+1), cam_in_world_locations(:,:,i+1)] = ...
          earl(init_orientations, init_locations, camera_params, world_points, image_points, threshold_irls, N);
     
 end
 
-
-
 %% Plot camera trajectory in 3D world CS + cameras
 
-load('good_rotations.mat')
-load('good_translations.mat')
+% load('good_rotations.mat')
+% load('good_translations.mat')
 % load('good_rotations2.mat')
 % load('good_translations2.mat')
+% load('good_rotations3.mat')
+% load('good_translations3.mat')
+% Best so far with 1.3 cm deviation
+% load('good_rotations4.mat')
+% load('good_translations4.mat')
+
+% load('test_rotations.mat')
+% load('test_translations.mat')
+% load('test_rotations2.mat')
+% load('test_translations2.mat')
 figure()
 % Predicted trajectory
 visualise_trajectory(vertices, edges, cam_in_world_orientations, cam_in_world_locations, 'Color', 'b');
@@ -310,13 +333,22 @@ end
 
 % TODO: Estimate ATE and RPE for validation and test sequences
 fileID = fopen('trajectory.txt', 'w');
+fileID2 = fopen('ground_truth.txt', 'w');
 
 for quack = 1:num_files
     quat = queeny(cam_in_world_orientations(:,:,quack));
+    quat_gt = queeny(gt_valid.orientations(:,:,quack));
+    
     timestamp = 86400*(datenum(now) - datenum('01-Jan-1970 00:00:00') - 1/24);
-    fprintf(fileID, '%f %f %f %f %f %f %f %f\r\n', timestamp, cam_in_world_locations(:,1,quack), cam_in_world_locations(:,2,quack), cam_in_world_locations(:,3,quack),...
+    
+    fprintf(fileID, '%f %f %f %f %f %f %f %f\r\n', timestamp, ...
+        cam_in_world_locations(:,1,quack), cam_in_world_locations(:,2,quack), cam_in_world_locations(:,3,quack),...
         quat(1), quat(2), quat(3), quat(4));
     
+    fprintf(fileID2, '%f %f %f %f %f %f %f %f\r\n', timestamp, ...
+        gt_valid.locations(:,1,quack), gt_valid.locations(:,2,quack), gt_valid.locations(:,3,quack),...
+        quat_gt(1), quat_gt(2), quat_gt(3), quat_gt(4));
 end
 
 fclose(fileID);
+fclose(fileID2);

@@ -16,32 +16,30 @@ rotationVector = rotationMatrixToVector(rotationMatrix);
 
 points3d = points3d';
 
-% Try check results with matlab jacobian
-
-jackie = jack(cameraParameters.IntrinsicMatrix', rotationVector, points2d, points3d);
-
-% est_points2d = project3d2image(points3d, cameraParameters, ...
-%         rotationMatrix, translationVector);
-% 
-% diff = pdist2(points2d', est_points2d');
-% energy = trace(diff);
-
-lambda = 0.001;
+lambda = 0.00001;
 old_delta = threshIRLS + 1; % ensure step is initialized bigger than thresh
 
 for i = 1:numiter
+    fprintf('IRLS Iteration %d\n', i);
     if old_delta < threshIRLS % If we move too slowly, we've converged already
         break
     end
     
     J = jack(cameraParameters.IntrinsicMatrix', rotationVector, points2d, points3d);
-    [RHO, W] = E(cameraParameters, rotationMatrix, translationVector, points3d, points2d);
-    delta = -inv(J'*W*J + lambda*eye(numel(J(1,:)))) * (J'*W*RHO');
     
-    new_error = E(cameraParameters, rotationVectorToMatrix(rotationVector + delta(1:3)'), translationVector + delta(4:6)', points3d, points2d);
-    if new_error > RHO
+    [RHO, W, error] = E(cameraParameters, rotationMatrix, translationVector, points3d, points2d);
+    sum_RHO = sum(RHO);
+    
+    delta = -inv(J'*W*J + lambda*eye(size(J,2))) * (J'*W*error');
+    
+    [new_error, ~] = E(cameraParameters, rotationVectorToMatrix(rotationVector + delta(1:3)'),...
+        translationVector + delta(4:6)', points3d, points2d);
+    sum_new_error = sum(new_error);
+    
+    if sum_new_error > sum_RHO
         lambda = lambda * 10;
     else
+        fprintf("ELSE\n");
         lambda = lambda / 10;
         rotationMatrix = rotationVectorToMatrix(rotationVector + delta(1:3)');
         translationVector = translationVector + delta(4:6)';
