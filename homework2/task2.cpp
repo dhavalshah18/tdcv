@@ -72,7 +72,7 @@ cv::Ptr<cv::ml::DTrees> task2() {
     std::cout << "FINISHED TRAINING" << std::endl;
 
     cv::ml::DTrees::Node* prediction;
-    prediction = tree->predict(feats.at<cv::Mat>(1, 200));
+//    prediction = tree->predict(feats.at<cv::Mat>(1, 200));
     return tree;
 }
 

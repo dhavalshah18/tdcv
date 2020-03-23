@@ -39,25 +39,22 @@ int main() {
     cv::flip(image, image_flip, -1); // -1 means flip around both axes
 
     std::vector<float> descriptors, descriptors_gray, descriptors_rotate, descriptors_flip;
+    int image_size = 130;
 
-//    descriptors = hog_descriptors(image);
-//    visualizeHOG(image_padded, descriptors, hog, 5);
+    cv::Mat image_padded(image_size, image_size, image.depth());
+    int left = int((image_size - image.cols) / 2);
+    int right = image_size - image.cols - left;
+    int top = int((image_size - image.rows) / 2);
+    int bottom = image_size - image.rows - top;
+    cv::copyMakeBorder(image, image_padded, top, bottom, left, right, cv::BORDER_REPLICATE);
+
+    cv::HOGDescriptor hog(image_padded.size(), cv::Size(50, 50), cv::Size(5, 5), cv::Size(25, 25), 8);
+
+    descriptors = hog_descriptors(image_padded);
+    visualizeHOG(image_padded, descriptors, hog, 3);
 //    visualizeHOG(image_gray, descriptors_gray, hog, 5);
 //    visualizeHOG(image_rotate, descriptors_rotate, hog, 5);
 //    visualizeHOG(image_flip, descriptors_flip, hog, 5);
-
-    auto tree = task2();
-
-    std::string test_image_name{"/home/dhaval/TDCV/homework2/data/task2/test/01/0067.jpg"};
-
-    // Loading image for task1
-    cv::Mat image_test{cv::imread(test_image_name)};
-    std::vector<float> descriptors1{hog_descriptors(image_test)};
-
-    cv::Mat f = cv::Mat(descriptors1).reshape(1, 1); // flatten to a single row
-    f.convertTo(f, CV_32F);
-    cv::ml::DTrees::Node* prediction;
-    prediction = tree->predict(f);
 
     return 0;
 }
